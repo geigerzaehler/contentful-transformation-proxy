@@ -5,6 +5,7 @@ import * as FS_ from 'fs'
 import * as B from 'bluebird'
 
 const FS = B.promisifyAll(FS_)
+const port = process.env.PORT || 3000
 
 
 express()
@@ -34,8 +35,8 @@ express()
     body: JSON.stringify(transform(response.data), null, 2),
   }
 }))
-.listen(3000, () => {
-  console.log('Listening on 3000')
+.listen(port, () => {
+  console.log(`Listening on port ${port}`)
 })
 
 
