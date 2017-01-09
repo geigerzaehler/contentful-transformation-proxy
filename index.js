@@ -6,6 +6,11 @@ import * as B from 'bluebird'
 
 const FS = B.promisifyAll(FS_)
 
+const dispatcherId = process.env['DISPATCHER_ID']
+
+if (!dispatcherId) {
+  throw new Error('Missing "DISPATCHER_ID" env variable')
+}
 
 express()
 .use(middleware(function* (req) {
