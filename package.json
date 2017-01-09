@@ -14,11 +14,13 @@
     "bluebird": "^3.4.7",
     "co": "^4.6.0",
     "contentful-resolve-response": "^0.1.2",
+    "cors": "^2.8.1",
     "eslint": "^3.13.0",
     "eslint-config-standard": "^6.2.1",
     "eslint-plugin-promise": "^3.4.0",
     "eslint-plugin-standard": "^2.0.1",
     "express": "^4.14.0",
+    "lodash": "^4.17.4",
     "nodemon": "^1.11.0"
   },
   "engines": {

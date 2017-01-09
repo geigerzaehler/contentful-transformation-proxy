@@ -1,40 +1,24 @@
 import express from 'express'
 import middleware from './lib/middleware'
 import axios from 'axios'
-import resolveRespose from 'contentful-resolve-response'
-import * as VM from 'vm'
+import expressCors from 'cors'
+import {mapValues} from 'lodash'
+
+import * as Out from './lib/out-transform'
 
 const dispatcherId = process.env['DISPATCHER_ID']
+const port = process.env.port || 3000
+const transformSpace = process.env['TRANSFORM_SPACE']
+const transformSpaceKey = process.env['TRANSFORM_SPACE_KEY']
 
 if (!dispatcherId) {
   throw new Error('Missing "DISPATCHER_ID" env variable')
 }
 
-function dispatch (dispatcher, entry) {
-  const chains = dispatcher.fields.chains
-  const applicableChains = chains.filter((chain) => chain.fields.contentType === entry.sys.contentType.sys.id)
-  const transformations = applicableChains.reduce((transformations, chain) => {
-    const compiledTransformations = chain.fields.transformationFunctions.map((transformation) => {
-      return new VM.Script(transformation.fields.code)
-    })
-
-    return transformations.concat(compiledTransformations)
-  }, [])
-
-  return transformations.reduce((trsfEntry, transformation) => {
-    const module = { exports: {} }
-
-    transformation.runInNewContext({module})
-
-    return module.exports(trsfEntry)
-  }, entry)
-}
-
 express()
+.use(expressCors())
 .use(middleware(function* (req) {
   const authHeader = req.headers['authorization']
-  const path = req.path.substr(1).split('/')
-  const space = path[1]
 
   const response = yield axios({
     method: 'GET',
@@ -45,32 +29,34 @@ express()
     },
   })
 
-  const dispatcher = yield* loadDispatcher(space, authHeader)
-  const transformedEntry = dispatch(dispatcher, response.data)
+  const transformer = yield* Out.load(transformSpace, transformSpaceKey, dispatcherId)
+  const transform = Out.makeTransformation(transformer)
+  const transformedResponse = applyOnResponse(transform, response.data)
 
   return {
     status: 200,
-    body: JSON.stringify(transformedEntry, null, 2),
+    body: JSON.stringify(transformedResponse, null, 2),
   }
 }))
 .listen(port, () => {
   console.log(`Listening on port ${port}`)
 })
 
-function* loadDispatcher (space, authHeader) {
-  const response = yield axios({
-    method: 'GET',
-    baseURL: 'https://cdn.contentful.com',
-    url: `/spaces/${space}/entries`,
-    params: {
-      'sys.id': dispatcherId,
-      include: 2,
-    },
-    headers: {
-      Authorization: authHeader,
-    },
-  })
-  const dispatcher = resolveRespose(response.data)[0]
 
-  return dispatcher
+/**
+ * Applies the function 'f' to all entries in a contentful reponse.
+ *
+ * If the response is a collection with includes it applies the
+ * function to all items and all includes. Otherwise it just applies
+ * the function to the response.
+ */
+function applyOnResponse (f, response) {
+  if (response.sys.type === 'Array') {
+    return Object.assign({}, response, {
+      items: response.items.map(f),
+      includes: mapValues(response.includes, f),
+    })
+  } else {
+    return f(response)
+  }
 }
