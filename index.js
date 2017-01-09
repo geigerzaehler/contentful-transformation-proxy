@@ -7,7 +7,7 @@ import {mapValues} from 'lodash'
 import * as Out from './lib/out-transform'
 
 const dispatcherId = process.env['DISPATCHER_ID']
-const port = process.env.port || 3000
+const port = process.env.PORT || 3000
 const transformSpace = process.env['TRANSFORM_SPACE']
 const transformSpaceKey = process.env['TRANSFORM_SPACE_KEY']
 
