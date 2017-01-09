@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "main": "index.js",
   "license": "MIT",
+  "scripts": {
+    "start": "babel-node index.js"
+  },
   "dependencies": {
     "axios": "^0.15.3",
     "babel": "^6.5.2",
@@ -16,6 +19,9 @@
     "eslint-plugin-standard": "^2.0.1",
     "express": "^4.14.0",
     "nodemon": "^1.11.0"
+  },
+  "engines": {
+    "node": "7.2.0"
   },
   "babel": {
     "presets": [
