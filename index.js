@@ -3,6 +3,8 @@ import middleware from './lib/middleware'
 import axios from 'axios'
 import expressCors from 'cors'
 import {mapValues} from 'lodash'
+import * as VM from 'vm'
+import bodyParser from 'body-parser'
 
 import * as Out from './lib/out-transform'
 
@@ -15,9 +17,47 @@ if (!dispatcherId) {
   throw new Error('Missing "DISPATCHER_ID" env variable')
 }
 
-express()
-.use(expressCors())
-.use(middleware(function* (req) {
+function transformation (code) {
+  return function (req) {
+    const js = new VM.Script(code)
+    const module = { exports: {} }
+
+    js.runInNewContext({ module })
+
+    return module.exports(req)
+  }
+}
+
+function* loadIncomingTransformations (space, authHeader) {
+  const response = yield axios({
+    method: 'GET',
+    baseURL: 'https://api.contentful.com',
+    url: `/spaces/${space}/public/entries`,
+    params: {
+      content_type: 'incomingTransformation',
+    },
+    headers: {
+      Authorization: `Bearer ${authHeader}`,
+    },
+  })
+
+  return response.data.items
+}
+
+function* createdEntry (space, authHeader, payload) {
+  return yield axios({
+    method: 'POST',
+    baseURL: 'https://api.contentful.com',
+    url: `/spaces/${space}/entries`,
+    data: payload.data,
+    headers: {
+      Authorization: `Bearer ${authHeader}`,
+      'X-Contentful-Content-Type': payload.contentType,
+    },
+  })
+}
+
+function* handleOutgoingRequest (req) {
   const authHeader = req.headers['authorization']
 
   const response = yield axios({
@@ -36,6 +76,35 @@ express()
   return {
     status: 200,
     body: JSON.stringify(transformedResponse, null, 2),
+  }
+}
+
+function* handleInconmingRequest (req) {
+  const path = req.path.substr(1).split('/')
+  const space = path[1]
+  const authHeader = req.query.accessToken
+  const incomingTransformations = yield* loadIncomingTransformations(space, authHeader)
+  const transformedPayload = transformation(incomingTransformations[0].fields.code['en-US'])(req)
+
+  if (transformedPayload) {
+    yield* createdEntry(space, authHeader, transformedPayload)
+  }
+
+  return {
+    status: 200,
+  }
+}
+
+express()
+.use(expressCors())
+.use(bodyParser.urlencoded({ extended: true }))
+.use(middleware(function* (req) {
+  if (req.method === 'GET') {
+    return yield* handleOutgoingRequest(req)
+  }
+
+  if (req.method === 'POST') {
+    return yield* handleInconmingRequest(req)
   }
 }))
 .listen(port, () => {
